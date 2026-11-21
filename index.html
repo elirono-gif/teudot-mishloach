@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f4e46">
+<title>תעודות משלוח</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+:root{
+  --bg:#eef2f1; --card:#fff; --fg:#14211e; --muted:#5d6b67; --line:#d5dedb;
+  --brand:#1f4e46; --go:#1d7a4f; --warn:#a15c00; --warn-soft:#fff2db; --bad:#b3261e;
+  --font:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:17px;line-height:1.45;
+  padding:0 max(14px,env(safe-area-inset-right,0px)) calc(90px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+header.top{position:sticky;top:0;z-index:5;background:var(--brand);color:#fff;margin:0 calc(-1*max(14px,env(safe-area-inset-left,0px)));padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px;display:flex;align-items:center;gap:10px}
+header.top h1{font-size:1.15rem;margin:0;flex:1}
+main{max-width:640px;margin:14px auto 0;display:grid;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:12px}
+.card h2{margin:0;font-size:1.1rem}
+.muted{color:var(--muted);font-size:.92rem;margin:0}
+label.f{display:grid;gap:4px;font-weight:500;font-size:.95rem}
+input,select,textarea{font:inherit;font-size:17px;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fbfcfc;color:var(--fg)}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.timebox{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+button{font:inherit;cursor:pointer}
+.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:700;font-size:1rem;background:#e3ebe9;color:var(--fg);text-align:center;text-decoration:none;display:block}
+.btn.now{padding:10px 14px;background:#dbe8e4;color:var(--brand)}
+.btn.big{width:100%;padding:16px;font-size:1.15rem;background:var(--go);color:#fff}
+.btn.brand{background:var(--brand);color:#fff}
+.btn.ghost{background:transparent;border:1px solid var(--line)}
+.btn.done{background:#dff3e8;color:var(--go)}
+.btn:disabled{opacity:.45}
+.waze{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--brand);font-weight:700;font-size:.92rem}
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.photos .ph{position:relative;width:92px;height:92px;border-radius:10px;overflow:hidden;background:#dfe6e4}
+.photos img{width:100%;height:100%;object-fit:cover;display:block}
+.photos .x{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.6);color:#fff;border:0;border-radius:50%;width:26px;height:26px;font-size:15px;line-height:26px;padding:0}
+.camera{width:92px;height:92px;border:2px dashed var(--line);border-radius:10px;display:grid;place-items:center;color:var(--muted);font-size:.85rem;text-align:center;background:#fafcfb}
+.wait{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 12px;font-weight:700}
+.sigwrap{border:1px solid var(--line);border-radius:12px;background:#fff;position:relative;height:190px;touch-action:none}
+.sigwrap canvas{width:100%;height:100%;display:block;touch-action:none}
+.sigwrap .hint{position:absolute;inset:auto 0 8px 0;text-align:center;color:#a5b0ad;pointer-events:none;font-size:.9rem}
+.list{display:grid;gap:8px}
+.item{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fbfcfc;text-align:right;width:100%;color:var(--fg)}
+.item .no{font-weight:800;color:var(--brand);font-variant-numeric:tabular-nums}
+.item .sub{color:var(--muted);font-size:.88rem}
+.pill{border-radius:99px;padding:2px 10px;font-size:.8rem;font-weight:700;background:#e3ebe9;white-space:nowrap}
+.pill.onway{background:#e2efff;color:#1b4f8f}.pill.loading{background:var(--warn-soft);color:var(--warn)}.pill.closed{background:#dff3e8;color:var(--go)}
+.co summary{font-weight:700;padding:6px 0;cursor:pointer}
+.err{background:#fde7e5;color:var(--bad);border-radius:10px;padding:10px 12px}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:#14211e;color:#fff;padding:10px 16px;border-radius:12px;z-index:20;max-width:90vw}
+.big-no{font-size:2rem;font-weight:800;color:var(--brand);text-align:center;font-variant-numeric:tabular-nums}
+#sheet{position:fixed;top:0;left:-20000px;width:794px;background:#fff;color:#111;font-family:Arial,sans-serif;direction:rtl;padding:40px 48px}
+</style>
+</head>
+<body>
+<header class="top"><h1 id="title">תעודות משלוח</h1></header>
+<main id="app"></main>
+<div id="sheet"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+'use strict';
+const WAIT_FREE = 30; // minutes of waiting included at each stop
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const nowHM = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+const heDate = iso => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+const mins = (a, b) => { if (!a || !b) return null; let m = (+b.slice(0, 2) * 60 + +b.slice(3)) - (+a.slice(0, 2) * 60 + +a.slice(3)); if (m < 0) m += 1440; return m; };
+const waitOver = s => { const m = mins(s.arrive, s.end); return m == null ? 0 : Math.max(0, m - WAIT_FREE); };
+const fmtMin = m => m >= 60 ? Math.floor(m / 60) + ' ש׳ ' + (m % 60) + ' דק׳' : m + ' דק׳';
+const waze = q => 'https://waze.com/ul?q=' + encodeURIComponent(q) + '&navigate=yes';
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function toast(t, ms = 2600) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, ms); }
+
+// ---- storage: everything stays in this phone (IndexedDB) ----
+const idb = (() => {
+  let p;
+  const open = () => p || (p = new Promise((ok, bad) => { const r = indexedDB.open('teuda', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => ok(r.result); r.onerror = () => bad(r.error); }));
+  const tx = (mode, f) => open().then(d => new Promise((ok, bad) => { const t = d.transaction('kv', mode); const q = f(t.objectStore('kv')); t.oncomplete = () => ok(q && q.result); t.onerror = () => bad(t.error); }));
+  return { get: k => tx('readonly', s => s.get(k)), set: (k, v) => tx('readwrite', s => s.put(v, k)), del: k => tx('readwrite', s => s.delete(k)) };
+})();
+
+// S = { biz:{name,id,truck}, companies:[{id,name}], next:Number, padLen:Number, notes:[...] }
+let S = null;
+let N = null;              // note on screen
+const PH = {};             // photo id -> dataURL (loaded on demand)
+const save = () => idb.set('state', S);
+const fmtNo = n => String(n).padStart(S.padLen || 0, '0');
+const coName = id => (S.companies.find(c => c.id === id) || {}).name || '';
+async function photo(id) { if (!(id in PH)) PH[id] = (await idb.get('ph:' + id)) || ''; return PH[id]; }
+async function addPhoto(data) { const id = newId(); PH[id] = data; await idb.set('ph:' + id, data); return id; }
+
+// Setup data comes in the link's #s=… part (never sent to any server).
+function readLinkSetup() {
+  const m = /[#&]s=([^&]+)/.exec(location.hash);
+  if (!m) return null;
+  try { return JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return null; }
+}
+
+// ---- photos ----
+function shrink(file, max = 1280) {
+  return new Promise((ok, bad) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = bad; img.src = url;
+  });
+}
+
+// ---- views ----
+function go(hash) { if (location.hash.replace(/^#/, '') === hash.replace(/^#/, '')) render(); else location.hash = hash; }
+window.addEventListener('hashchange', () => render());
+
+async function render() {
+  const h = location.hash;
+  if (!S || !S.next) return viewSetup();
+  if (h.startsWith('#note=')) { const id = h.slice(6); N = S.notes.find(n => n.id === id) || null; if (!N) return go('#'); return viewNote(); }
+  if (h === '#settings') return viewSettings();
+  N = null; return viewHome();
+}
+
+function viewSetup() {
+  $('#title').textContent = 'תעודות משלוח · התחלה';
+  const biz = (S && S.biz) || {};
+  $('#app').innerHTML = `
+    <section class="card"><h2>ברוך הבא${biz.name ? ', ' + esc(biz.name) : ''}</h2>
+      <p class="muted">פעם אחת בלבד: מה מספר התעודה האחרונה שכתבת בפנקס? מכאן המספור ממשיך.</p>
+      <label class="f">מספר התעודה האחרונה בפנקס<input id="last" inputmode="numeric" dir="ltr" placeholder="למשל 01258"></label>
+      ${biz.name ? '' : `<label class="f">שם העסק<input id="bn"></label><label class="f">מספר עוסק<input id="bi" inputmode="numeric" dir="ltr"></label><label class="f">מספר משאית<input id="bt" inputmode="numeric" dir="ltr"></label>`}
+      <div id="err"></div>
+      <button class="btn big" id="go">להתחיל</button>
+    </section>`;
+  $('#go').onclick = async () => {
+    const raw = $('#last').value.trim();
+    if (!/^\d{1,8}$/.test(raw)) return showErr('כתוב רק ספרות, למשל 01258.');
+    S = S || { biz: {}, companies: [], notes: [] };
+    if (!biz.name) S.biz = { name: $('#bn').value.trim(), id: $('#bi').value.trim(), truck: $('#bt').value.trim() };
+    S.next = +raw + 1; S.padLen = raw.length;
+    await save(); toast('התעודה הבאה: ' + fmtNo(S.next)); go('#');
+  };
+}
+
+function noteRow(n) {
+  const w = waitOver(n.load) + waitOver(n.unload);
+  const st = { loading: 'בהעמסה', onway: 'בדרך', closed: 'נסגרה' }[n.status];
+  return `<button class="item" data-open="${n.id}"><span class="no">${fmtNo(n.no)}</span>
+    <span><div>${esc(coName(n.companyId))}</div><div class="sub">${heDate(n.date)} · ${esc(n.from)} ← ${esc(n.to)}${w ? ' · המתנה ' + fmtMin(w) : ''}</div></span>
+    <span class="pill ${n.status}">${st}</span></button>`;
+}
+
+function viewHome() {
+  $('#title').textContent = S.biz.name || 'תעודות משלוח';
+  const open = S.notes.filter(n => n.status !== 'closed').sort((a, b) => b.no - a.no);
+  const months = [...new Set(S.notes.map(n => n.date.slice(0, 7)).concat(today().slice(0, 7)))].sort().reverse();
+  const ym = months.includes(viewHome.ym) ? viewHome.ym : months[0];
+  const closed = S.notes.filter(n => n.status === 'closed' && n.date.startsWith(ym));
+  const byCo = {};
+  closed.forEach(n => (byCo[n.companyId] = byCo[n.companyId] || []).push(n));
+  $('#app').innerHTML = `
+    <button class="btn big" id="new">+ תעודה חדשה · מס׳ ${fmtNo(S.next)}</button>
+    ${open.length ? `<section class="card"><h2>פתוחות עכשיו</h2><div class="list">${open.map(noteRow).join('')}</div></section>` : ''}
+    <section class="card">
+      <div style="display:flex;gap:10px;align-items:center;justify-content:space-between"><h2>התיק החודשי</h2>
+      <select id="month" style="width:auto">${months.map(m => `<option value="${m}" ${m === ym ? 'selected' : ''}>${m.slice(5)}/${m.slice(0, 4)}</option>`).join('')}</select></div>
+      ${closed.length ? Object.keys(byCo).map(cid => `<details class="co"><summary>${esc(coName(cid))} · ${byCo[cid].length} תעודות</summary><div class="list">${byCo[cid].sort((a, b) => a.no - b.no).map(noteRow).join('')}</div></details>`).join('') : '<p class="muted">עוד אין תעודות סגורות בחודש הזה.</p>'}
+    </section>
+    <button class="btn ghost" id="set">הגדרות</button>`;
+  $('#new').onclick = async () => {
+    const n = { id: newId(), no: S.next, date: today(), companyId: '', from: '', to: '', weight: '', cargo: '',
+      load: { arrive: '', end: '', photos: [] }, unload: { arrive: '', end: '', signer: '', sig: '' }, status: 'loading', sent: {} };
+    S.next++; S.notes.push(n); await save(); go('#note=' + n.id);
+  };
+  $('#month').onchange = e => { viewHome.ym = e.target.value; viewHome(); };
+  $('#set').onclick = () => go('#settings');
+  document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => go('#note=' + b.dataset.open));
+}
+
+function timeField(id, label, val, dis) {
+  return `<label class="f">${label}<span class="timebox"><input type="time" id="${id}" value="${esc(val)}" ${dis}><button type="button" class="btn now" data-now="${id}" ${dis}>עכשיו</button></span></label>`;
+}
+
+async function viewNote() {
+  const closed = N.status === 'closed', dis = closed ? 'disabled' : '';
+  await Promise.all(N.load.photos.concat(N.unload.sig ? [N.unload.sig] : []).map(photo));
+  $('#title').textContent = 'תעודת משלוח ' + fmtNo(N.no);
+  const coOpts = S.companies.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(c => `<option value="${c.id}" ${c.id === N.companyId ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+  const lw = waitOver(N.load), uw = waitOver(N.unload);
+  const photos = N.load.photos.map((id, i) => `<div class="ph"><img src="${PH[id]}" alt="מטען">${closed ? '' : `<button class="x" data-delp="${i}" aria-label="מחק">×</button>`}</div>`).join('')
+    + (closed ? '' : `<label class="camera">📷<br>צילום מטען<input type="file" accept="image/*" capture="environment" id="cam" hidden></label>`);
+  const loadCard = `
+    <section class="card"><h2>1 · העמסה</h2>
+      <label class="f">חברה<select id="companyId" ${dis}><option value="">בחר חברה…</option>${coOpts}<option value="__new">+ חברה חדשה</option></select></label>
+      <div id="newco" hidden class="card" style="background:#f6f9f8"><label class="f">שם החברה<input id="newcoName"></label><button class="btn brand" id="newcoSave" type="button">הוסף חברה</button></div>
+      <label class="f">תאריך<input type="date" id="date" value="${esc(N.date)}" ${dis}></label>
+      <label class="f">מאיפה<input id="from" value="${esc(N.from)}" placeholder="עיר / כתובת" ${dis}></label>
+      ${N.from && !closed ? `<a class="waze" href="${waze(N.from)}" target="_blank" rel="noopener">🧭 ניווט ב-Waze להעמסה</a>` : ''}
+      <label class="f">לאן<input id="to" value="${esc(N.to)}" placeholder="עיר / כתובת" ${dis}></label>
+      <div class="row2"><label class="f">משקל<input id="weight" value="${esc(N.weight)}" placeholder="למשל 3 טון" ${dis}></label>
+      <label class="f">מה מעמיסים<input id="cargo" value="${esc(N.cargo)}" placeholder="משטחים, מזגנים…" ${dis}></label></div>
+      ${timeField('la', 'שעת הגעה להעמסה', N.load.arrive, dis)}
+      <div><div class="f" style="margin-bottom:6px">צילום המטען לפני העמסה</div><div class="photos">${photos}</div></div>
+      ${timeField('le', 'שעת סיום העמסה', N.load.end, dis)}
+      ${lw ? `<div class="wait">המתנה בהעמסה מעל חצי שעה: ${fmtMin(lw)}</div>` : ''}
+      ${N.status === 'loading' ? `<button class="btn big" id="depart">סיימתי להעמיס · יוצא לדרך</button>` : ''}
+    </section>`;
+  const unloadCard = N.status === 'loading' ? '' : `
+    <section class="card"><h2>2 · פריקה</h2>
+      ${N.to && !closed ? `<a class="waze" href="${waze(N.to)}" target="_blank" rel="noopener">🧭 ניווט ב-Waze לפריקה</a>` : ''}
+      ${timeField('ua', 'שעת הגעה לפריקה', N.unload.arrive, dis)}
+      ${timeField('ue', 'שעת סיום פריקה', N.unload.end, dis)}
+      ${uw ? `<div class="wait">המתנה בפריקה מעל חצי שעה: ${fmtMin(uw)}</div>` : ''}
+      <label class="f">שם מי שמקבל<input id="signer" value="${esc(N.unload.signer)}" ${dis}></label>
+      <div class="f">חתימת הלקוח</div>
+      ${N.unload.sig ? `<img src="${PH[N.unload.sig]}" alt="חתימה" style="max-height:150px;background:#fff;border:1px solid var(--line);border-radius:12px">${closed ? '' : '<button class="btn ghost" id="resign" type="button">לחתום מחדש</button>'}`
+        : `<div class="sigwrap"><canvas id="sig"></canvas><div class="hint">הלקוח חותם כאן באצבע</div></div><button class="btn ghost" id="sigclear" type="button">ניקוי חתימה</button>`}
+      ${N.status === 'onway' ? `<button class="btn big" id="close">סגור תעודה</button>` : ''}
+    </section>`;
+  const doneCard = !closed ? '' : `
+    <section class="card"><h2>התעודה נסגרה ✓</h2>
+      <p class="muted">${(lw + uw) ? 'המתנה לחיוב: ' + fmtMin(lw + uw) : 'בלי המתנה לחיוב'}</p>
+      <p class="muted">שולחים פעמיים: פעם לחברה, ופעם לקבוצה "מאור מסמכים".</p>
+      <button class="btn big ${N.sent.co ? 'done' : ''}" id="shareCo">${N.sent.co ? '✓ נשלח לחברה · לשלוח שוב' : '1 · לשלוח לחברה'}</button>
+      <button class="btn big ${N.sent.grp ? 'done' : ''}" id="shareGrp">${N.sent.grp ? '✓ נשלח לקבוצה · לשלוח שוב' : '2 · לשלוח לקבוצה מאור מסמכים'}</button>
+      <button class="btn ghost" id="view">לראות את ה-PDF</button>
+    </section>`;
+  const delBtn = N.status === 'loading' ? `<button class="btn ghost" id="del" style="color:var(--bad)">לבטל את התעודה</button>` : '';
+  $('#app').innerHTML = loadCard + unloadCard + doneCard + `<div id="err"></div><button class="btn ghost" id="home">חזרה לרשימה</button>` + delBtn;
+  bindNote();
+}
+
+async function readFields() {
+  if (!N || N.status === 'closed') return;
+  const v = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  if (v('companyId') !== undefined && v('companyId') !== '__new') N.companyId = v('companyId');
+  ['date', 'from', 'to', 'weight', 'cargo'].forEach(k => { if (v(k) !== undefined) N[k] = v(k).trim(); });
+  if (v('la') !== undefined) N.load.arrive = v('la');
+  if (v('le') !== undefined) N.load.end = v('le');
+  if (v('ua') !== undefined) N.unload.arrive = v('ua');
+  if (v('ue') !== undefined) N.unload.end = v('ue');
+  if (v('signer') !== undefined) N.unload.signer = v('signer').trim();
+  await save();
+}
+
+function showErr(t) { $('#err').innerHTML = t ? `<div class="err">${esc(t)}</div>` : ''; if (t) $('#err').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+
+let sigPad = null;
+function bindNote() {
+  $('#home').onclick = async () => { await readFields(); go('#'); };
+  document.querySelectorAll('input,select').forEach(el => el.addEventListener('change', async () => {
+    if (el.id === 'companyId' || el.id === 'cam' || el.id === 'newcoName') return;
+    await readFields(); if (['la', 'le', 'ua', 'ue', 'from', 'to'].includes(el.id)) viewNote();
+  }));
+  document.querySelectorAll('[data-now]').forEach(b => b.onclick = async () => { document.getElementById(b.dataset.now).value = nowHM(); await readFields(); viewNote(); });
+  const co = $('#companyId');
+  co.onchange = async () => { if (co.value === '__new') { $('#newco').hidden = false; $('#newcoName').focus(); } else { $('#newco').hidden = true; await readFields(); } };
+  $('#newcoSave').onclick = async () => {
+    const name = $('#newcoName').value.trim(); if (!name) return;
+    const c = { id: newId(), name }; S.companies.push(c);
+    await readFields(); N.companyId = c.id; await save(); viewNote(); toast('החברה נוספה');
+  };
+  const cam = $('#cam');
+  if (cam) cam.onchange = async () => {
+    const f = cam.files[0]; if (!f) return;
+    await readFields();
+    try { N.load.photos.push(await addPhoto(await shrink(f))); await save(); viewNote(); }
+    catch (e) { showErr('לא הצלחתי לשמור את התמונה. ייתכן שהזיכרון בטלפון מלא.'); }
+  };
+  document.querySelectorAll('[data-delp]').forEach(b => b.onclick = async () => { const [id] = N.load.photos.splice(+b.dataset.delp, 1); idb.del('ph:' + id); await save(); viewNote(); });
+
+  const dep = $('#depart');
+  if (dep) dep.onclick = async () => {
+    await readFields();
+    if (!N.companyId) return showErr('בחר חברה.');
+    if (!N.from || !N.to) return showErr('מלא מאיפה ולאן.');
+    if (!N.load.arrive) return showErr('מלא שעת הגעה להעמסה.');
+    if (!N.load.photos.length) return showErr('צלם את המטען לפני שיוצאים.');
+    if (!N.load.end) N.load.end = nowHM();
+    N.status = 'onway'; await save(); toast('נשמר · נסיעה טובה');
+    await viewNote(); window.scrollTo(0, document.body.scrollHeight);
+  };
+
+  const cv = $('#sig');
+  if (cv) sigPad = makePad(cv);
+  if ($('#sigclear')) $('#sigclear').onclick = () => sigPad && sigPad.clear();
+  if ($('#resign')) $('#resign').onclick = async () => { idb.del('ph:' + N.unload.sig); N.unload.sig = ''; await save(); viewNote(); };
+
+  const cl = $('#close');
+  if (cl) cl.onclick = async () => {
+    await readFields();
+    if (!N.unload.arrive || !N.unload.end) return showErr('מלא שעת הגעה ושעת סיום בפריקה.');
+    if (!N.unload.signer) return showErr('מלא את השם של מי שמקבל.');
+    if (!N.unload.sig) { if (!sigPad || sigPad.empty()) return showErr('הלקוח צריך לחתום.'); N.unload.sig = await addPhoto(sigPad.png()); }
+    N.status = 'closed'; N.closedAt = new Date().toISOString(); await save();
+    toast('התעודה נסגרה'); await viewNote(); window.scrollTo(0, document.body.scrollHeight);
+  };
+
+  if ($('#shareCo')) $('#shareCo').onclick = () => shareNote('co');
+  if ($('#shareGrp')) $('#shareGrp').onclick = () => shareNote('grp');
+  if ($('#view')) $('#view').onclick = viewPdf;
+  if ($('#del')) $('#del').onclick = async () => {
+    if (!confirm('לבטל את תעודה ' + fmtNo(N.no) + '?')) return;
+    N.load.photos.forEach(id => idb.del('ph:' + id));
+    S.notes = S.notes.filter(n => n !== N);
+    if (N.no === S.next - 1) S.next--;   // the last number goes back only if nothing came after it
+    await save(); go('#');
+  };
+}
+
+function makePad(cv) {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = r.width * dpr; cv.height = r.height * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.lineWidth = 2.6; g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = '#111';
+  let drawing = false, any = false, last = null;
+  const pt = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  cv.addEventListener('pointerdown', e => { drawing = true; last = pt(e); cv.setPointerCapture(e.pointerId); const h = cv.parentElement.querySelector('.hint'); if (h) h.hidden = true; });
+  cv.addEventListener('pointermove', e => { if (!drawing) return; const p = pt(e); g.beginPath(); g.moveTo(last[0], last[1]); g.lineTo(p[0], p[1]); g.stroke(); last = p; any = true; });
+  ['pointerup', 'pointercancel'].forEach(t => cv.addEventListener(t, () => drawing = false));
+  return {
+    clear() { g.clearRect(0, 0, cv.width, cv.height); any = false; const h = cv.parentElement.querySelector('.hint'); if (h) h.hidden = false; },
+    empty: () => !any,
+    png() { const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(cv, 0, 0); return c.toDataURL('image/png'); },
+  };
+}
+
+// ---- PDF (made in the phone) ----
+function loadScript(src) { return new Promise((ok, bad) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); }); }
+async function libs() {
+  if (!window.html2canvas) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  if (!window.jspdf) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+}
+async function makePdf(n) {
+  await libs();
+  const lw = waitOver(n.load), uw = waitOver(n.unload), B = S.biz;
+  const td = 'padding:7px 10px;border:1px solid #ccc;font-size:15px';
+  const sheet = $('#sheet');
+  sheet.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1f4e46;padding-bottom:12px">
+      <div><div style="font-size:28px;font-weight:800;color:#1f4e46">${esc(B.name)}</div><div style="font-size:14px;color:#444">${B.id ? 'ע.מ ' + esc(B.id) : ''}${B.truck ? ' · משאית ' + esc(B.truck) : ''}</div></div>
+      <div style="text-align:left"><div style="font-size:22px;font-weight:800">תעודת משלוח</div><div style="font-size:20px">מס׳ ${fmtNo(n.no)}</div><div style="font-size:14px">${heDate(n.date)}</div></div>
+    </div>
+    <div style="font-size:18px;margin:16px 0 10px"><b>לכבוד:</b> ${esc(coName(n.companyId))}</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+      <tr><td style="${td};width:28%;background:#f2f5f4">מאיפה</td><td style="${td}">${esc(n.from)}</td></tr>
+      <tr><td style="${td};background:#f2f5f4">לאן</td><td style="${td}">${esc(n.to)}</td></tr>
+      ${n.cargo ? `<tr><td style="${td};background:#f2f5f4">מטען</td><td style="${td}">${esc(n.cargo)}</td></tr>` : ''}
+      ${n.weight ? `<tr><td style="${td};background:#f2f5f4">משקל</td><td style="${td}">${esc(n.weight)}</td></tr>` : ''}
+    </table>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px;text-align:center">
+      <tr style="background:#f2f5f4"><td style="${td}"></td><td style="${td}">הגעה</td><td style="${td}">סיום</td><td style="${td}">המתנה מעל 30 דק׳</td></tr>
+      <tr><td style="${td}">העמסה</td><td style="${td}">${n.load.arrive}</td><td style="${td}">${n.load.end}</td><td style="${td}">${lw ? fmtMin(lw) : '—'}</td></tr>
+      <tr><td style="${td}">פריקה</td><td style="${td}">${n.unload.arrive}</td><td style="${td}">${n.unload.end}</td><td style="${td}">${uw ? fmtMin(uw) : '—'}</td></tr>
+    </table>
+    ${(lw + uw) ? `<div style="font-size:16px;font-weight:700;margin-bottom:14px">סה״כ המתנה לחיוב: ${fmtMin(lw + uw)}</div>` : ''}
+    ${n.load.photos.length ? `<div style="font-size:14px;color:#444;margin-bottom:6px">המטען לפני העמסה:</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${n.load.photos.slice(0, 3).map(id => `<img src="${PH[id]}" style="width:220px;height:165px;object-fit:cover;border:1px solid #ccc">`).join('')}</div>` : ''}
+    <div style="display:flex;gap:24px;align-items:flex-end;margin-top:10px">
+      <div style="font-size:16px">התקבל ע״י: <b>${esc(n.unload.signer)}</b></div>
+      ${n.unload.sig ? `<div><img src="${PH[n.unload.sig]}" style="height:90px;border-bottom:1px solid #333"><div style="font-size:12px;color:#555">חתימת המקבל</div></div>` : ''}
+    </div>`;
+  await Promise.all([...sheet.querySelectorAll('img')].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: '#fff' });
+  sheet.innerHTML = '';
+  const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+  pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, Math.min(297, canvas.height * 210 / canvas.width));
+  return pdf.output('blob');
+}
+const pdfName = n => 'תעודת משלוח ' + fmtNo(n.no) + ' - ' + coName(n.companyId) + '.pdf';
+
+async function shareNote(to) {
+  const n = N;
+  try {
+    toast('מכין PDF…');
+    const file = new File([await makePdf(n)], pdfName(n), { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: file.name });
+      n.sent[to] = new Date().toISOString(); await save(); viewNote();
+    } else { downloadBlob(file); }
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    if (!navigator.onLine) toast('צריך קליטה בפעם הראשונה שמכינים PDF. נסה שוב כשיש קליטה.', 4500);
+    else toast('לא הצלחתי לשתף. נסה "לראות את ה-PDF".', 4000);
+  }
+}
+async function viewPdf() {
+  try { toast('מכין PDF…'); downloadBlob(new File([await makePdf(N)], pdfName(N), { type: 'application/pdf' })); }
+  catch (e) { toast('לא הצלחתי להכין PDF.'); }
+}
+function downloadBlob(file) { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.target = '_blank'; document.body.appendChild(a); a.click(); a.remove(); }
+
+// ---- settings ----
+function viewSettings() {
+  $('#title').textContent = 'הגדרות';
+  const list = S.companies.slice().sort((a, b) => a.name.localeCompare(b.name, 'he'));
+  $('#app').innerHTML = `
+    <section class="card"><h2>מספור</h2>
+      <p class="muted">התעודה הבאה תקבל את המספר:</p><div class="big-no">${fmtNo(S.next)}</div>
+      <label class="f">לשנות (רק אם יש טעות)<input id="nx" inputmode="numeric" dir="ltr" value="${fmtNo(S.next)}"></label>
+      <button class="btn brand" id="nxs">לשמור מספר</button></section>
+    <section class="card"><h2>חברות (${list.length})</h2>
+      <div class="list">${list.map(c => `<div class="item" style="grid-template-columns:1fr auto"><span>${esc(c.name)}</span><button class="btn ghost" data-ren="${c.id}" style="padding:6px 10px">שינוי שם</button></div>`).join('')}</div>
+      <label class="f">חברה חדשה<input id="cn"></label><button class="btn brand" id="cadd">הוסף</button></section>
+    <section class="card"><h2>העסק</h2>
+      <label class="f">שם<input id="bn" value="${esc(S.biz.name)}"></label>
+      <div class="row2"><label class="f">מספר עוסק<input id="bi" dir="ltr" value="${esc(S.biz.id)}"></label><label class="f">משאית<input id="bt" dir="ltr" value="${esc(S.biz.truck)}"></label></div>
+      <button class="btn brand" id="bs">לשמור</button>
+      <p class="muted">כל התעודות שמורות רק בטלפון הזה. העותק הקבוע הוא ה-PDF שנשלח לקבוצה "מאור מסמכים".</p></section>
+    <button class="btn ghost" id="home">חזרה</button>`;
+  $('#home').onclick = () => go('#');
+  $('#nxs').onclick = async () => { const raw = $('#nx').value.trim(); if (!/^\d{1,8}$/.test(raw)) return toast('רק ספרות'); if (!confirm('התעודה הבאה תהיה ' + raw + '. בטוח?')) return; S.next = +raw; S.padLen = raw.length; await save(); toast('נשמר'); viewSettings(); };
+  $('#cadd').onclick = async () => { const name = $('#cn').value.trim(); if (!name) return; S.companies.push({ id: newId(), name }); await save(); toast('נוספה'); viewSettings(); };
+  document.querySelectorAll('[data-ren]').forEach(b => b.onclick = async () => { const c = S.companies.find(x => x.id === b.dataset.ren); const name = prompt('שם החברה', c.name); if (!name || !name.trim()) return; c.name = name.trim(); await save(); viewSettings(); });
+  $('#bs').onclick = async () => { S.biz = { name: $('#bn').value.trim(), id: $('#bi').value.trim(), truck: $('#bt').value.trim() }; await save(); toast('נשמר'); };
+}
+
+// ---- start ----
+(async function start() {
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  S = (await idb.get('state')) || null;
+  const setup = readLinkSetup();
+  if (setup) {
+    S = S || { biz: {}, companies: [], notes: [] };
+    if (setup.b && !S.biz.name) S.biz = { name: setup.b[0] || '', id: setup.b[1] || '', truck: setup.b[2] || '' };
+    (setup.c || []).forEach(name => { if (!S.companies.some(c => c.name === name)) S.companies.push({ id: newId(), name }); });
+    await save();
+    history.replaceState(null, '', location.pathname);
+  }
+  render();
+})();
+</script>
+</body>
+</html>
