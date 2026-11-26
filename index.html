@@ -556,7 +556,12 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferr
 window.addEventListener('appinstalled', () => { deferredInstall = null; toast('האפליקציה הותקנה ✓'); });
 function installBox() {
   if (standalone()) return '';
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const ua = navigator.userAgent, ios = /iphone|ipad|ipod/i.test(ua);
+  if (/WhatsApp|FBAN|FBAV|FB_IAB|Instagram|Line\/|; wv\)/i.test(ua) || (ios && !/Safari/i.test(ua)))
+    return `<section class="card" style="background:#ffe3e0;border-color:transparent"><b>⚠️ הקישור נפתח בתוך וואטסאפ</b><div style="margin-top:4px">מכאן אי אפשר להתקין. ${ios
+      ? 'לוחצים על ⋯ או על כפתור השיתוף ← "פתח בספארי", ושם "הוסף למסך הבית".'
+      : 'לוחצים על ⋮ למעלה ← "פתיחה בכרום", ושם "התקנת אפליקציה".'}</div></section>`;
+  if (ios && /CriOS|FxiOS|EdgiOS/i.test(ua)) return `<section class="card" style="background:var(--warn-soft);border-color:transparent"><b>📲 להתקין כאפליקציה</b><div class="muted" style="color:var(--fg)">באייפון עדיף ספארי: מעתיקים את הקישור לספארי ← כפתור השיתוף ⬆️ ← "הוסף למסך הבית".</div></section>`;
   if (deferredInstall) return `<button class="btn brand" id="inst" style="width:100%;padding:14px">📲 להתקין את האפליקציה בטלפון</button>`;
   return `<section class="card" style="background:var(--warn-soft);border-color:transparent"><b>📲 להתקין כאפליקציה</b><div class="muted" style="color:var(--fg)">${ios
     ? 'בספארי: לוחצים על כפתור השיתוף ⬆️ למטה ← "הוסף למסך הבית".'
