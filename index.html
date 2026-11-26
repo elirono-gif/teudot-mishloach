@@ -101,6 +101,7 @@ const coName = id => (S.companies.find(c => c.id === id) || {}).name || '';
 async function photo(id) { if (!(id in PH)) PH[id] = (await idb.get('ph:' + id)) || ''; return PH[id]; }
 const place = (n, k) => [n[k], n[k + 'Addr']].filter(Boolean).join(' · ');
 const docsOf = n => n.load.docs || (n.load.docs = []);
+const exOf = n => n.extra || (n.extra = { on: false, what: '', start: '', end: '' });
 async function addPhoto(data) { const id = newId(); PH[id] = data; await idb.set('ph:' + id, data); return id; }
 
 // Setup data comes in the link's #s=… part (never sent to any server).
@@ -231,6 +232,15 @@ async function viewNote() {
       ${lw ? `<div class="wait">המתנה בהעמסה מעל חצי שעה: ${fmtMin(lw)}</div>` : ''}
       ${N.status === 'loading' ? `<button class="btn big" id="depart">סיימתי להעמיס · יוצא לדרך</button>` : ''}
     </section>`;
+  const X = exOf(N), xm = mins(X.start, X.end);
+  const extraCard = closed && !X.on ? '' : `
+    <section class="card"><h2>שינוע וסבלות</h2>
+      <label style="display:flex;gap:10px;align-items:center;font-size:1.05rem"><input type="checkbox" id="son" style="width:auto;transform:scale(1.4)" ${X.on ? 'checked' : ''} ${dis}> היה שינוע / סבלות</label>
+      ${X.on ? `<label class="f">מה עשינו<input id="swhat" value="${esc(X.what)}" placeholder="למשל: הורדה לקומה 3, פיזור בחדרים" ${dis}></label>
+      ${timeField('sa', 'התחלה במקום', X.start, dis)}
+      ${timeField('se', 'סיום במקום', X.end, dis)}
+      ${xm != null ? `<div class="wait" style="background:var(--brand-soft, #e6f0ee);color:var(--fg)">זמן במקום: ${fmtMin(xm)}</div>` : ''}` : ''}
+    </section>`;
   const unloadCard = N.status === 'loading' ? '' : `
     <section class="card"><h2>2 · פריקה</h2>
       ${toNav && !closed ? `<a class="waze" href="${waze(toNav)}" target="_blank" rel="noopener">🧭 ניווט ב-Waze לפריקה</a>` : ''}
@@ -252,7 +262,7 @@ async function viewNote() {
       <button class="btn ghost" id="view">לראות את ה-PDF</button>
     </section>`;
   const delBtn = N.status === 'loading' ? `<button class="btn ghost" id="del" style="color:var(--bad)">לבטל את התעודה</button>` : '';
-  $('#app').innerHTML = loadCard + unloadCard + doneCard + `<div id="err"></div><button class="btn ghost" id="home">חזרה לרשימה</button>` + delBtn;
+  $('#app').innerHTML = loadCard + extraCard + unloadCard + doneCard + `<div id="err"></div><button class="btn ghost" id="home">חזרה לרשימה</button>` + delBtn;
   bindNote();
 }
 
@@ -266,6 +276,11 @@ async function readFields() {
   if (v('ua') !== undefined) N.unload.arrive = v('ua');
   if (v('ue') !== undefined) N.unload.end = v('ue');
   if (v('signer') !== undefined) N.unload.signer = v('signer').trim();
+  const X = exOf(N), son = document.getElementById('son');
+  if (son) X.on = son.checked;
+  if (v('swhat') !== undefined) X.what = v('swhat').trim();
+  if (v('sa') !== undefined) X.start = v('sa');
+  if (v('se') !== undefined) X.end = v('se');
   await save();
 }
 
@@ -276,7 +291,7 @@ function bindNote() {
   $('#home').onclick = async () => { await readFields(); go('#'); };
   document.querySelectorAll('input,select').forEach(el => el.addEventListener('change', async () => {
     if (el.id === 'companyId' || el.id === 'cam' || el.id === 'cam2' || el.id === 'newcoName') return;
-    await readFields(); if (['la', 'le', 'ua', 'ue', 'from', 'fromAddr', 'to', 'toAddr'].includes(el.id)) viewNote();
+    await readFields(); if (['la', 'le', 'ua', 'ue', 'sa', 'se', 'son', 'from', 'fromAddr', 'to', 'toAddr'].includes(el.id)) viewNote();
   }));
   document.querySelectorAll('[data-now]').forEach(b => b.onclick = async () => { document.getElementById(b.dataset.now).value = nowHM(); await readFields(); viewNote(); });
   const co = $('#companyId');
@@ -325,6 +340,7 @@ function bindNote() {
     await readFields();
     if (!N.unload.arrive || !N.unload.end) return showErr('מלא שעת הגעה ושעת סיום בפריקה.');
     if (!N.unload.signer) return showErr('מלא את השם של מי שמקבל.');
+    if (exOf(N).on && (!exOf(N).start || !exOf(N).end)) return showErr('בשינוע וסבלות: מלא שעת התחלה ושעת סיום במקום.');
     if (!N.unload.sig) { if (!sigPad || sigPad.empty()) return showErr('הלקוח צריך לחתום.'); N.unload.sig = await addPhoto(sigPad.png()); }
     N.status = 'closed'; N.closedAt = new Date().toISOString(); await save();
     toast('התעודה נסגרה'); await viewNote(); window.scrollTo(0, document.body.scrollHeight);
@@ -386,6 +402,7 @@ async function makePdf(n) {
       <tr><td style="${td}">העמסה</td><td style="${td}">${n.load.arrive}</td><td style="${td}">${n.load.end}</td><td style="${td}">${lw ? fmtMin(lw) : '—'}</td></tr>
       <tr><td style="${td}">פריקה</td><td style="${td}">${n.unload.arrive}</td><td style="${td}">${n.unload.end}</td><td style="${td}">${uw ? fmtMin(uw) : '—'}</td></tr>
     </table>
+    ${exOf(n).on ? `<table style="width:100%;border-collapse:collapse;margin-bottom:14px"><tr><td style="${td};width:28%;background:#f2f5f4">שינוע וסבלות</td><td style="${td}">${esc(exOf(n).what) || '—'}</td></tr><tr><td style="${td};background:#f2f5f4">זמן במקום</td><td style="${td}">${exOf(n).start} – ${exOf(n).end}${mins(exOf(n).start, exOf(n).end) != null ? ' · <b>' + fmtMin(mins(exOf(n).start, exOf(n).end)) + '</b>' : ''}</td></tr></table>` : ''}
     ${(lw + uw) ? `<div style="font-size:16px;font-weight:700;margin-bottom:14px">סה״כ המתנה לחיוב: ${fmtMin(lw + uw)}</div>` : ''}
     ${docsOf(n).length ? `<div style="font-size:14px;color:#444;margin-bottom:10px">מצורפת תעודת המשלוח של המפעל (${docsOf(n).length === 1 ? 'בעמוד הבא' : docsOf(n).length + ' עמודים בהמשך'}).</div>` : ''}
     ${n.load.photos.length ? `<div style="font-size:14px;color:#444;margin-bottom:6px">המטען לפני העמסה:</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${n.load.photos.slice(0, 3).map(id => `<img src="${PH[id]}" style="width:220px;height:165px;object-fit:cover;border:1px solid #ccc">`).join('')}</div>` : ''}
