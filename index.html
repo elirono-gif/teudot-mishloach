@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1f4e46">
-<title>תעודות משלוח</title>
+<title>מאור הובלות</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -130,6 +130,7 @@ async function render() {
   if (!S || !S.next) return viewSetup();
   if (h.startsWith('#note=')) { const id = h.slice(6); N = S.notes.find(n => n.id === id) || null; if (!N) return go('#'); return viewNote(); }
   if (h === '#settings') return viewSettings();
+  if (h === '#profit') return viewProfit();
   N = null; return viewHome();
 }
 
@@ -171,6 +172,7 @@ function viewHome() {
   const byCo = {};
   closed.forEach(n => (byCo[n.companyId] = byCo[n.companyId] || []).push(n));
   $('#app').innerHTML = `
+    ${S.profit ? `<button class="btn brand" id="prof" style="width:100%;padding:14px">📊 כמה נשאר בכיס</button>` : ''}
     <button class="btn big" id="new">+ תעודה חדשה · מס׳ ${fmtNo(S.next)}</button>
     ${open.length ? `<section class="card"><h2>פתוחות עכשיו</h2><div class="list">${open.map(noteRow).join('')}</div></section>` : ''}
     <section class="card">
@@ -186,6 +188,7 @@ function viewHome() {
   };
   $('#month').onchange = e => { viewHome.ym = e.target.value; viewHome(); };
   $('#set').onclick = () => go('#settings');
+  if ($('#prof')) $('#prof').onclick = () => go('#profit');
   document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => go('#note=' + b.dataset.open));
 }
 
@@ -425,6 +428,52 @@ function viewSettings() {
   $('#bs').onclick = async () => { S.biz = { name: $('#bn').value.trim(), id: $('#bi').value.trim(), truck: $('#bt').value.trim() }; await save(); toast('נשמר'); };
 }
 
+// ---- profit estimate: numbers come only in the setup link (p), never in this file ----
+// p = { asOf:'25/11/2026', m:[[name, income|null, days, of, docs, [[label, amount, est]...]]...], f:[[id,name,amount,est,hint]...], x:extraAmount, xl:extraLabel }
+const ils = n => '₪' + Math.round(n).toLocaleString('he-IL');
+function viewProfit() {
+  $('#title').textContent = 'כמה נשאר בכיס';
+  const P = S.profit; if (!P) return go('#');
+  P.fv = P.fv || {};
+  const fixed = P.f.map(f => ({ id: f[0], name: f[1], v: typeof P.fv[f[0]] === 'number' ? P.fv[f[0]] : f[2], est: f[3], hint: f[4] || '' }));
+  const tag = t => `<span class="pill loading" style="margin-inline-start:6px">${t}</span>`;
+  $('#app').innerHTML = `
+    <section class="card" style="background:var(--warn-soft);border-color:transparent"><p class="muted" style="color:var(--fg)"><b>הערכה בלבד</b>, נכון ל-${esc(P.asOf)}. לפני מע"מ. המספרים הסופיים אצל רואה החשבון.</p></section>
+    <div id="months" style="display:grid;gap:14px"></div>
+    <section class="card" style="background:var(--brand);color:#fff;border:0"><div>רווח משוער (החודשים עם הכנסות)</div><div class="big-no" style="color:#fff" id="grand"></div><div id="gn" style="font-size:.9rem;opacity:.9"></div></section>
+    <section class="card"><h2>הוצאות קבועות לחודש</h2><p class="muted">אפשר לשנות כל מספר. ${tag('הערכה')} = צריך לבדוק.</p>
+      ${fixed.map(f => `<div style="display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center"><label for="fx-${f.id}">${esc(f.name)}${f.est ? tag('הערכה') : ''}${f.hint ? `<div class="muted" style="font-size:.8rem">${esc(f.hint)}</div>` : ''}</label><input id="fx-${f.id}" data-fx="${f.id}" type="number" inputmode="numeric" dir="ltr" value="${f.v}"></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;font-weight:700;border-top:1px solid var(--line);padding-top:8px"><span>סה"כ לחודש</span><span id="fsum"></span></div>
+      ${P.x ? `<label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="px" style="width:auto" ${P.xOn ? 'checked' : ''}><span>${esc(P.xl)} (${ils(P.x)})</span></label>` : ''}
+    </section>
+    <button class="btn ghost" id="home">חזרה</button>`;
+  const calc = () => {
+    const fm = fixed.reduce((s, f) => s + f.v, 0);
+    $('#fsum').textContent = ils(fm);
+    let grand = 0;
+    $('#months').innerHTML = P.m.map((m, i) => {
+      const [name, income, days, of, docs, costs] = m;
+      const fp = fm * days / of, known = costs.reduce((s, c) => s + c[1], 0);
+      const extra = P.xOn && i === P.m.length - 1 ? P.x : 0;
+      const inc = income == null ? null : income + extra;
+      const profit = inc == null ? null : inc - known - fp;
+      if (profit != null) grand += profit;
+      const row = (l, v, cls = '') => `<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding:3px 0" class="${cls}"><span>${l}</span><span style="white-space:nowrap${cls ? ';color:var(--bad)' : ''}">${v}</span></div>`;
+      return `<section class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><h2>${esc(name)}</h2><span style="font-size:1.5rem;font-weight:800;color:${profit == null ? 'var(--muted)' : 'var(--go)'}">${profit == null ? 'אין הכנסות' : ils(profit)}</span></div>
+        <div>${row('הכנסות' + (docs ? ` · ${docs} חשבוניות` : ''), inc == null ? 'לא ב-Paperless' : ils(income))}
+        ${extra ? row(esc(P.xl), ils(extra)) : ''}
+        ${costs.map(c => row(esc(c[0]) + (c[2] ? tag('הערכה') : ''), '−' + ils(c[1]), 'm')).join('')}
+        ${row('הוצאות קבועות' + (days < of ? ` (${days} ימים)` : '') + tag('הערכה'), '−' + ils(fp), 'm')}</div></section>`;
+    }).join('');
+    $('#grand').textContent = ils(grand);
+    $('#gn').textContent = P.x ? (P.xOn ? 'כולל ' + P.xl : 'בלי ' + P.xl + ' (' + ils(P.x) + ')') : '';
+  };
+  calc();
+  document.querySelectorAll('[data-fx]').forEach(inp => inp.oninput = async () => { const f = fixed.find(x => x.id === inp.dataset.fx); f.v = +inp.value || 0; P.fv[f.id] = f.v; calc(); await save(); });
+  if ($('#px')) $('#px').onchange = async e => { P.xOn = e.target.checked; calc(); await save(); };
+  $('#home').onclick = () => go('#');
+}
+
 // ---- start ----
 (async function start() {
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
@@ -435,6 +484,7 @@ function viewSettings() {
     S = S || { biz: {}, companies: [], notes: [] };
     if (setup.b && !S.biz.name) S.biz = { name: setup.b[0] || '', id: setup.b[1] || '', truck: setup.b[2] || '' };
     (setup.c || []).forEach(name => { if (!S.companies.some(c => c.name === name)) S.companies.push({ id: newId(), name }); });
+    if (setup.p) S.profit = Object.assign({ fv: (S.profit && S.profit.fv) || {} }, setup.p);
     await save();
     history.replaceState(null, '', location.pathname);
   }
