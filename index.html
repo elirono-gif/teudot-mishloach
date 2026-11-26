@@ -38,6 +38,7 @@ button{font:inherit;cursor:pointer}
 .btn.done{background:#dff3e8;color:var(--go)}
 .btn:disabled{opacity:.45}
 .waze{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--brand);font-weight:700;font-size:.92rem}
+[hidden]{display:none!important}
 .photos{display:flex;flex-wrap:wrap;gap:8px}
 .photos .ph{position:relative;width:92px;height:92px;border-radius:10px;overflow:hidden;background:#dfe6e4}
 .photos img{width:100%;height:100%;object-fit:cover;display:block}
@@ -98,6 +99,8 @@ const save = () => idb.set('state', S);
 const fmtNo = n => String(n).padStart(S.padLen || 0, '0');
 const coName = id => (S.companies.find(c => c.id === id) || {}).name || '';
 async function photo(id) { if (!(id in PH)) PH[id] = (await idb.get('ph:' + id)) || ''; return PH[id]; }
+const place = (n, k) => [n[k], n[k + 'Addr']].filter(Boolean).join(' · ');
+const docsOf = n => n.load.docs || (n.load.docs = []);
 async function addPhoto(data) { const id = newId(); PH[id] = data; await idb.set('ph:' + id, data); return id; }
 
 // Setup data comes in the link's #s=… part (never sent to any server).
@@ -108,14 +111,14 @@ function readLinkSetup() {
 }
 
 // ---- photos ----
-function shrink(file, max = 1280) {
+function shrink(file, max = 1280, q = 0.7) {
   return new Promise((ok, bad) => {
     const img = new Image(); const url = URL.createObjectURL(file);
     img.onload = () => {
       const r = Math.min(1, max / Math.max(img.width, img.height));
       const c = document.createElement('canvas'); c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-      ok(c.toDataURL('image/jpeg', 0.7));
+      ok(c.toDataURL('image/jpeg', q));
     };
     img.onerror = bad; img.src = url;
   });
@@ -159,7 +162,7 @@ function noteRow(n) {
   const w = waitOver(n.load) + waitOver(n.unload);
   const st = { loading: 'בהעמסה', onway: 'בדרך', closed: 'נסגרה' }[n.status];
   return `<button class="item" data-open="${n.id}"><span class="no">${fmtNo(n.no)}</span>
-    <span><div>${esc(coName(n.companyId))}</div><div class="sub">${heDate(n.date)} · ${esc(n.from)} ← ${esc(n.to)}${w ? ' · המתנה ' + fmtMin(w) : ''}</div></span>
+    <span><div>${esc(coName(n.companyId))}</div><div class="sub">${heDate(n.date)} · ${esc(place(n, 'from'))} ← ${esc(place(n, 'to'))}${w ? ' · המתנה ' + fmtMin(w) : ''}</div></span>
     <span class="pill ${n.status}">${st}</span></button>`;
 }
 
@@ -182,8 +185,8 @@ function viewHome() {
     </section>
     <button class="btn ghost" id="set">הגדרות</button>`;
   $('#new').onclick = async () => {
-    const n = { id: newId(), no: S.next, date: today(), companyId: '', from: '', to: '', weight: '', cargo: '',
-      load: { arrive: '', end: '', photos: [] }, unload: { arrive: '', end: '', signer: '', sig: '' }, status: 'loading', sent: {} };
+    const n = { id: newId(), no: S.next, date: today(), companyId: '', from: '', fromAddr: '', to: '', toAddr: '', weight: '', cargo: '',
+      load: { arrive: '', end: '', photos: [], docs: [] }, unload: { arrive: '', end: '', signer: '', sig: '' }, status: 'loading', sent: {} };
     S.next++; S.notes.push(n); await save(); go('#note=' + n.id);
   };
   $('#month').onchange = e => { viewHome.ym = e.target.value; viewHome(); };
@@ -198,31 +201,39 @@ function timeField(id, label, val, dis) {
 
 async function viewNote() {
   const closed = N.status === 'closed', dis = closed ? 'disabled' : '';
-  await Promise.all(N.load.photos.concat(N.unload.sig ? [N.unload.sig] : []).map(photo));
+  await Promise.all(N.load.photos.concat(docsOf(N), N.unload.sig ? [N.unload.sig] : []).map(photo));
   $('#title').textContent = 'תעודת משלוח ' + fmtNo(N.no);
   const coOpts = S.companies.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(c => `<option value="${c.id}" ${c.id === N.companyId ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
   const lw = waitOver(N.load), uw = waitOver(N.unload);
   const photos = N.load.photos.map((id, i) => `<div class="ph"><img src="${PH[id]}" alt="מטען">${closed ? '' : `<button class="x" data-delp="${i}" aria-label="מחק">×</button>`}</div>`).join('')
     + (closed ? '' : `<label class="camera">📷<br>צילום מטען<input type="file" accept="image/*" capture="environment" id="cam" hidden></label>`);
+  const docs = docsOf(N).map((id, i) => `<div class="ph"><img src="${PH[id]}" alt="תעודת המפעל">${closed ? '' : `<button class="x" data-deld="${i}" aria-label="מחק">×</button>`}</div>`).join('')
+    + (closed ? '' : `<label class="camera">📄<br>צילום תעודה<input type="file" accept="image/*" capture="environment" id="cam2" hidden></label>`);
+  const fromNav = N.fromAddr || N.from, toNav = N.toAddr || N.to;
   const loadCard = `
     <section class="card"><h2>1 · העמסה</h2>
       <label class="f">חברה<select id="companyId" ${dis}><option value="">בחר חברה…</option>${coOpts}<option value="__new">+ חברה חדשה</option></select></label>
       <div id="newco" hidden class="card" style="background:#f6f9f8"><label class="f">שם החברה<input id="newcoName"></label><button class="btn brand" id="newcoSave" type="button">הוסף חברה</button></div>
       <label class="f">תאריך<input type="date" id="date" value="${esc(N.date)}" ${dis}></label>
-      <label class="f">מאיפה<input id="from" value="${esc(N.from)}" placeholder="עיר / כתובת" ${dis}></label>
-      ${N.from && !closed ? `<a class="waze" href="${waze(N.from)}" target="_blank" rel="noopener">🧭 ניווט ב-Waze להעמסה</a>` : ''}
-      <label class="f">לאן<input id="to" value="${esc(N.to)}" placeholder="עיר / כתובת" ${dis}></label>
+      <div class="f" style="font-weight:700">מאיפה</div>
+      <label class="f">שם המקום<input id="from" value="${esc(N.from)}" placeholder="מפעל / מחסן / שם פרויקט" ${dis}></label>
+      <label class="f">כתובת או עיר (אם יש)<input id="fromAddr" value="${esc(N.fromAddr || '')}" placeholder="אפשר להשאיר ריק" ${dis}></label>
+      ${fromNav && !closed ? `<a class="waze" href="${waze(fromNav)}" target="_blank" rel="noopener">🧭 ניווט ב-Waze להעמסה</a>` : ''}
+      <div class="f" style="font-weight:700">לאן</div>
+      <label class="f">שם המקום<input id="to" value="${esc(N.to)}" placeholder="אתר בנייה / פרויקט / מחסן" ${dis}></label>
+      <label class="f">כתובת או עיר (אם יש)<input id="toAddr" value="${esc(N.toAddr || '')}" placeholder="אפשר להשאיר ריק" ${dis}></label>
       <div class="row2"><label class="f">משקל<input id="weight" value="${esc(N.weight)}" placeholder="למשל 3 טון" ${dis}></label>
       <label class="f">מה מעמיסים<input id="cargo" value="${esc(N.cargo)}" placeholder="משטחים, מזגנים…" ${dis}></label></div>
       ${timeField('la', 'שעת הגעה להעמסה', N.load.arrive, dis)}
       <div><div class="f" style="margin-bottom:6px">צילום המטען לפני העמסה</div><div class="photos">${photos}</div></div>
+      <div><div class="f" style="margin-bottom:6px">צילום תעודת המשלוח של המפעל (אם נתנו)</div><div class="photos">${docs}</div></div>
       ${timeField('le', 'שעת סיום העמסה', N.load.end, dis)}
       ${lw ? `<div class="wait">המתנה בהעמסה מעל חצי שעה: ${fmtMin(lw)}</div>` : ''}
       ${N.status === 'loading' ? `<button class="btn big" id="depart">סיימתי להעמיס · יוצא לדרך</button>` : ''}
     </section>`;
   const unloadCard = N.status === 'loading' ? '' : `
     <section class="card"><h2>2 · פריקה</h2>
-      ${N.to && !closed ? `<a class="waze" href="${waze(N.to)}" target="_blank" rel="noopener">🧭 ניווט ב-Waze לפריקה</a>` : ''}
+      ${toNav && !closed ? `<a class="waze" href="${waze(toNav)}" target="_blank" rel="noopener">🧭 ניווט ב-Waze לפריקה</a>` : ''}
       ${timeField('ua', 'שעת הגעה לפריקה', N.unload.arrive, dis)}
       ${timeField('ue', 'שעת סיום פריקה', N.unload.end, dis)}
       ${uw ? `<div class="wait">המתנה בפריקה מעל חצי שעה: ${fmtMin(uw)}</div>` : ''}
@@ -249,7 +260,7 @@ async function readFields() {
   if (!N || N.status === 'closed') return;
   const v = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
   if (v('companyId') !== undefined && v('companyId') !== '__new') N.companyId = v('companyId');
-  ['date', 'from', 'to', 'weight', 'cargo'].forEach(k => { if (v(k) !== undefined) N[k] = v(k).trim(); });
+  ['date', 'from', 'fromAddr', 'to', 'toAddr', 'weight', 'cargo'].forEach(k => { if (v(k) !== undefined) N[k] = v(k).trim(); });
   if (v('la') !== undefined) N.load.arrive = v('la');
   if (v('le') !== undefined) N.load.end = v('le');
   if (v('ua') !== undefined) N.unload.arrive = v('ua');
@@ -264,8 +275,8 @@ let sigPad = null;
 function bindNote() {
   $('#home').onclick = async () => { await readFields(); go('#'); };
   document.querySelectorAll('input,select').forEach(el => el.addEventListener('change', async () => {
-    if (el.id === 'companyId' || el.id === 'cam' || el.id === 'newcoName') return;
-    await readFields(); if (['la', 'le', 'ua', 'ue', 'from', 'to'].includes(el.id)) viewNote();
+    if (el.id === 'companyId' || el.id === 'cam' || el.id === 'cam2' || el.id === 'newcoName') return;
+    await readFields(); if (['la', 'le', 'ua', 'ue', 'from', 'fromAddr', 'to', 'toAddr'].includes(el.id)) viewNote();
   }));
   document.querySelectorAll('[data-now]').forEach(b => b.onclick = async () => { document.getElementById(b.dataset.now).value = nowHM(); await readFields(); viewNote(); });
   const co = $('#companyId');
@@ -282,13 +293,21 @@ function bindNote() {
     try { N.load.photos.push(await addPhoto(await shrink(f))); await save(); viewNote(); }
     catch (e) { showErr('לא הצלחתי לשמור את התמונה. ייתכן שהזיכרון בטלפון מלא.'); }
   };
+  const cam2 = $('#cam2');
+  if (cam2) cam2.onchange = async () => {
+    const f = cam2.files[0]; if (!f) return;
+    await readFields();
+    try { docsOf(N).push(await addPhoto(await shrink(f, 2000, 0.8))); await save(); viewNote(); }
+    catch (e) { showErr('לא הצלחתי לשמור את התמונה. ייתכן שהזיכרון בטלפון מלא.'); }
+  };
+  document.querySelectorAll('[data-deld]').forEach(b => b.onclick = async () => { const [id] = docsOf(N).splice(+b.dataset.deld, 1); idb.del('ph:' + id); await save(); viewNote(); });
   document.querySelectorAll('[data-delp]').forEach(b => b.onclick = async () => { const [id] = N.load.photos.splice(+b.dataset.delp, 1); idb.del('ph:' + id); await save(); viewNote(); });
 
   const dep = $('#depart');
   if (dep) dep.onclick = async () => {
     await readFields();
     if (!N.companyId) return showErr('בחר חברה.');
-    if (!N.from || !N.to) return showErr('מלא מאיפה ולאן.');
+    if (!place(N, 'from') || !place(N, 'to')) return showErr('מלא מאיפה ולאן (שם המקום או כתובת).');
     if (!N.load.arrive) return showErr('מלא שעת הגעה להעמסה.');
     if (!N.load.photos.length) return showErr('צלם את המטען לפני שיוצאים.');
     if (!N.load.end) N.load.end = nowHM();
@@ -316,7 +335,7 @@ function bindNote() {
   if ($('#view')) $('#view').onclick = viewPdf;
   if ($('#del')) $('#del').onclick = async () => {
     if (!confirm('לבטל את תעודה ' + fmtNo(N.no) + '?')) return;
-    N.load.photos.forEach(id => idb.del('ph:' + id));
+    N.load.photos.concat(docsOf(N)).forEach(id => idb.del('ph:' + id));
     S.notes = S.notes.filter(n => n !== N);
     if (N.no === S.next - 1) S.next--;   // the last number goes back only if nothing came after it
     await save(); go('#');
@@ -357,8 +376,8 @@ async function makePdf(n) {
     </div>
     <div style="font-size:18px;margin:16px 0 10px"><b>לכבוד:</b> ${esc(coName(n.companyId))}</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
-      <tr><td style="${td};width:28%;background:#f2f5f4">מאיפה</td><td style="${td}">${esc(n.from)}</td></tr>
-      <tr><td style="${td};background:#f2f5f4">לאן</td><td style="${td}">${esc(n.to)}</td></tr>
+      <tr><td style="${td};width:28%;background:#f2f5f4">מאיפה</td><td style="${td}">${esc(place(n, 'from'))}</td></tr>
+      <tr><td style="${td};background:#f2f5f4">לאן</td><td style="${td}">${esc(place(n, 'to'))}</td></tr>
       ${n.cargo ? `<tr><td style="${td};background:#f2f5f4">מטען</td><td style="${td}">${esc(n.cargo)}</td></tr>` : ''}
       ${n.weight ? `<tr><td style="${td};background:#f2f5f4">משקל</td><td style="${td}">${esc(n.weight)}</td></tr>` : ''}
     </table>
@@ -368,6 +387,7 @@ async function makePdf(n) {
       <tr><td style="${td}">פריקה</td><td style="${td}">${n.unload.arrive}</td><td style="${td}">${n.unload.end}</td><td style="${td}">${uw ? fmtMin(uw) : '—'}</td></tr>
     </table>
     ${(lw + uw) ? `<div style="font-size:16px;font-weight:700;margin-bottom:14px">סה״כ המתנה לחיוב: ${fmtMin(lw + uw)}</div>` : ''}
+    ${docsOf(n).length ? `<div style="font-size:14px;color:#444;margin-bottom:10px">מצורפת תעודת המשלוח של המפעל (${docsOf(n).length === 1 ? 'בעמוד הבא' : docsOf(n).length + ' עמודים בהמשך'}).</div>` : ''}
     ${n.load.photos.length ? `<div style="font-size:14px;color:#444;margin-bottom:6px">המטען לפני העמסה:</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${n.load.photos.slice(0, 3).map(id => `<img src="${PH[id]}" style="width:220px;height:165px;object-fit:cover;border:1px solid #ccc">`).join('')}</div>` : ''}
     <div style="display:flex;gap:24px;align-items:flex-end;margin-top:10px">
       <div style="font-size:16px">התקבל ע״י: <b>${esc(n.unload.signer)}</b></div>
@@ -378,6 +398,12 @@ async function makePdf(n) {
   sheet.innerHTML = '';
   const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
   pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, 210, Math.min(297, canvas.height * 210 / canvas.width));
+  for (const id of docsOf(n)) {   // factory note: one page each, as photographed
+    const src = await photo(id); if (!src) continue;
+    const im = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = src; });
+    const r = Math.min(190 / im.width, 277 / im.height), w = im.width * r, h = im.height * r;
+    pdf.addPage(); pdf.addImage(src, 'JPEG', (210 - w) / 2, 10, w, h);
+  }
   return pdf.output('blob');
 }
 const pdfName = n => 'תעודת משלוח ' + fmtNo(n.no) + ' - ' + coName(n.companyId) + '.pdf';
@@ -484,6 +510,7 @@ function viewProfit() {
     S = S || { biz: {}, companies: [], notes: [] };
     if (setup.b && !S.biz.name) S.biz = { name: setup.b[0] || '', id: setup.b[1] || '', truck: setup.b[2] || '' };
     (setup.c || []).forEach(name => { if (!S.companies.some(c => c.name === name)) S.companies.push({ id: newId(), name }); });
+    if (setup.l && /^\d{1,8}$/.test(setup.l) && (!S.next || !S.notes.length)) { S.next = +setup.l + 1; S.padLen = setup.l.length; }
     if (setup.p) S.profit = Object.assign({ fv: (S.profit && S.profit.fv) || {} }, setup.p);
     await save();
     history.replaceState(null, '', location.pathname);
