@@ -7,7 +7,11 @@
 <title>מאור הובלות</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="מאור הובלות">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
 :root{
   --bg:#eef2f1; --card:#fff; --fg:#14211e; --muted:#5d6b67; --line:#d5dedb;
@@ -106,6 +110,7 @@ const exOf = n => n.extra || (n.extra = { on: false, what: '', start: '', end: '
 const coPpk = c => (c && c.ppk != null) ? c.ppk : 15;
 const noteAmt = n => (+n.km || 0) * (+n.ppk || 0) + (+n.add || 0);
 const shek = n => '₪' + Math.round(n).toLocaleString('he-IL');
+const VAT = 0.18;
 async function addPhoto(data) { const id = newId(); PH[id] = data; await idb.set('ph:' + id, data); return id; }
 
 // Setup data comes in the link's #s=… part (never sent to any server).
@@ -181,6 +186,7 @@ function viewHome() {
   closed.forEach(n => (byCo[n.companyId] = byCo[n.companyId] || []).push(n));
   $('#app').innerHTML = `
     ${S.profit ? `<button class="btn brand" id="prof" style="width:100%;padding:14px">📊 כמה נשאר בכיס</button>` : ''}
+    ${installBox()}
     <button class="btn big" id="new">+ תעודה חדשה · מס׳ ${fmtNo(S.next)}</button>
     ${open.length ? `<section class="card"><h2>פתוחות עכשיו</h2><div class="list">${open.map(noteRow).join('')}</div></section>` : ''}
     <section class="card">
@@ -198,6 +204,7 @@ function viewHome() {
   $('#month').onchange = e => { viewHome.ym = e.target.value; viewHome(); };
   $('#set').onclick = () => go('#settings');
   if ($('#prof')) $('#prof').onclick = () => go('#profit');
+  if ($('#inst')) $('#inst').onclick = async () => { if (!deferredInstall) return; deferredInstall.prompt(); await deferredInstall.userChoice; deferredInstall = null; viewHome(); };
   document.querySelectorAll('[data-open]').forEach(b => b.onclick = () => go('#note=' + b.dataset.open));
 }
 
@@ -418,8 +425,13 @@ async function makePdf(n) {
       <tr><td style="${td}">העמסה</td><td style="${td}">${n.load.arrive}</td><td style="${td}">${n.load.end}</td><td style="${td}">${lw ? fmtMin(lw) : '—'}</td></tr>
       <tr><td style="${td}">פריקה</td><td style="${td}">${n.unload.arrive}</td><td style="${td}">${n.unload.end}</td><td style="${td}">${uw ? fmtMin(uw) : '—'}</td></tr>
     </table>
-    ${n.km ? `<div style="font-size:15px;margin-bottom:10px">ק"מ: <b>${esc(n.km)}</b></div>` : ''}
-    ${exOf(n).on ? `<table style="width:100%;border-collapse:collapse;margin-bottom:14px"><tr><td style="${td};width:28%;background:#f2f5f4">שינוע וסבלות</td><td style="${td}">${esc(exOf(n).what) || '—'}</td></tr><tr><td style="${td};background:#f2f5f4">זמן במקום</td><td style="${td}">${exOf(n).start} – ${exOf(n).end}${mins(exOf(n).start, exOf(n).end) != null ? ' · <b>' + fmtMin(mins(exOf(n).start, exOf(n).end)) + '</b>' : ''}</td></tr></table>` : ''}
+    ${noteAmt(n) ? (() => { const base = (+n.km || 0) * (+n.ppk || 0), add = +n.add || 0, tot = base + add, vat = tot * VAT;
+      const r = (l, v, b) => `<tr${b ? ' style="font-weight:800;background:#f2f5f4"' : ''}><td style="${td}">${l}</td><td style="${td};width:30%;text-align:left" dir="ltr">${v}</td></tr>`;
+      return `<table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+        ${base ? r(`הובלה: ${esc(n.km)} ק"מ × ${shek(+n.ppk)}`, shek(base)) : ''}
+        ${add ? r('תוספת (שינוע / סבלות / המתנה)', shek(add)) : ''}
+        ${r('סה"כ לפני מע"מ', shek(tot))}${r('מע"מ ' + Math.round(VAT * 100) + '%', shek(vat))}${r('סה"כ לתשלום', shek(tot + vat), 1)}</table>`; })() : ''}
+    ${exOf(n).on ? `<table style="width:100%;border-collapse:collapse;margin-bottom:14px"><tr><td style="${td};width:28%;background:#f2f5f4">שינוע וסבלות</td><td style="${td}">${esc(exOf(n).what) || '—'}</td></tr><tr><td style="${td};background:#f2f5f4">זמן במקום</td><td style="${td}"><span dir="ltr">${exOf(n).start} – ${exOf(n).end}</span>${mins(exOf(n).start, exOf(n).end) != null ? ' · <b>' + fmtMin(mins(exOf(n).start, exOf(n).end)) + '</b>' : ''}</td></tr></table>` : ''}
     ${(lw + uw) ? `<div style="font-size:16px;font-weight:700;margin-bottom:14px">סה״כ המתנה לחיוב: ${fmtMin(lw + uw)}</div>` : ''}
     ${docsOf(n).length ? `<div style="font-size:14px;color:#444;margin-bottom:10px">מצורפת תעודת המשלוח של המפעל (${docsOf(n).length === 1 ? 'בעמוד הבא' : docsOf(n).length + ' עמודים בהמשך'}).</div>` : ''}
     ${n.load.photos.length ? `<div style="font-size:14px;color:#444;margin-bottom:6px">המטען לפני העמסה:</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${n.load.photos.slice(0, 3).map(id => `<img src="${PH[id]}" style="width:220px;height:165px;object-fit:cover;border:1px solid #ccc">`).join('')}</div>` : ''}
@@ -535,6 +547,20 @@ function viewProfit() {
   document.querySelectorAll('[data-fx]').forEach(inp => inp.oninput = async () => { const f = fixed.find(x => x.id === inp.dataset.fx); f.v = +inp.value || 0; P.fv[f.id] = f.v; calc(); await save(); });
   if ($('#px')) $('#px').onchange = async e => { P.xOn = e.target.checked; calc(); await save(); };
   $('#home').onclick = () => go('#');
+}
+
+// ---- install on the phone's home screen ----
+let deferredInstall = null;
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; if (!N && S && S.next) render(); });
+window.addEventListener('appinstalled', () => { deferredInstall = null; toast('האפליקציה הותקנה ✓'); });
+function installBox() {
+  if (standalone()) return '';
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (deferredInstall) return `<button class="btn brand" id="inst" style="width:100%;padding:14px">📲 להתקין את האפליקציה בטלפון</button>`;
+  return `<section class="card" style="background:var(--warn-soft);border-color:transparent"><b>📲 להתקין כאפליקציה</b><div class="muted" style="color:var(--fg)">${ios
+    ? 'בספארי: לוחצים על כפתור השיתוף ⬆️ למטה ← "הוסף למסך הבית".'
+    : 'בכרום: לוחצים על ⋮ למעלה ← "התקנת אפליקציה" או "הוספה למסך הבית".'}</div></section>`;
 }
 
 // ---- start ----
