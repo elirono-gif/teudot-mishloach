@@ -102,6 +102,10 @@ async function photo(id) { if (!(id in PH)) PH[id] = (await idb.get('ph:' + id))
 const place = (n, k) => [n[k], n[k + 'Addr']].filter(Boolean).join(' · ');
 const docsOf = n => n.load.docs || (n.load.docs = []);
 const exOf = n => n.extra || (n.extra = { on: false, what: '', start: '', end: '' });
+// price per km: regular customers 15, new ones 18 (Maor, 26/11)
+const coPpk = c => (c && c.ppk != null) ? c.ppk : 15;
+const noteAmt = n => (+n.km || 0) * (+n.ppk || 0) + (+n.add || 0);
+const shek = n => '₪' + Math.round(n).toLocaleString('he-IL');
 async function addPhoto(data) { const id = newId(); PH[id] = data; await idb.set('ph:' + id, data); return id; }
 
 // Setup data comes in the link's #s=… part (never sent to any server).
@@ -182,7 +186,8 @@ function viewHome() {
     <section class="card">
       <div style="display:flex;gap:10px;align-items:center;justify-content:space-between"><h2>התיק החודשי</h2>
       <select id="month" style="width:auto">${months.map(m => `<option value="${m}" ${m === ym ? 'selected' : ''}>${m.slice(5)}/${m.slice(0, 4)}</option>`).join('')}</select></div>
-      ${closed.length ? Object.keys(byCo).map(cid => `<details class="co"><summary>${esc(coName(cid))} · ${byCo[cid].length} תעודות</summary><div class="list">${byCo[cid].sort((a, b) => a.no - b.no).map(noteRow).join('')}</div></details>`).join('') : '<p class="muted">עוד אין תעודות סגורות בחודש הזה.</p>'}
+      ${closed.length ? Object.keys(byCo).map(cid => `<details class="co"><summary>${esc(coName(cid))} · ${byCo[cid].length} תעודות${byCo[cid].some(noteAmt) ? ` · ${byCo[cid].reduce((s, n) => s + (+n.km || 0), 0)} ק"מ · <b>${shek(byCo[cid].reduce((s, n) => s + noteAmt(n), 0))}</b>` : ''}</summary><div class="list">${byCo[cid].sort((a, b) => a.no - b.no).map(noteRow).join('')}</div></details>`).join('') : '<p class="muted">עוד אין תעודות סגורות בחודש הזה.</p>'}
+      ${closed.some(noteAmt) ? `<div style="display:flex;justify-content:space-between;font-weight:700;border-top:1px solid var(--line);padding-top:8px"><span>סה"כ לחיוב בחודש</span><span>${shek(closed.reduce((s, n) => s + noteAmt(n), 0))} + מע"מ</span></div>` : ''}
     </section>
     <button class="btn ghost" id="set">הגדרות</button>`;
   $('#new').onclick = async () => {
@@ -253,6 +258,14 @@ async function viewNote() {
         : `<div class="sigwrap"><canvas id="sig"></canvas><div class="hint">הלקוח חותם כאן באצבע</div></div><button class="btn ghost" id="sigclear" type="button">ניקוי חתימה</button>`}
       ${N.status === 'onway' ? `<button class="btn big" id="close">סגור תעודה</button>` : ''}
     </section>`;
+  const amt = noteAmt(N);
+  const payCard = `
+    <section class="card"><h2>חיוב</h2>
+      <div class="row2"><label class="f">ק"מ<input id="km" type="number" inputmode="decimal" dir="ltr" value="${esc(N.km || '')}" ${dis}></label>
+      <label class="f">₪ לק"מ<input id="ppk" type="number" inputmode="decimal" dir="ltr" value="${esc(N.ppk == null ? '' : N.ppk)}" ${dis}></label></div>
+      <label class="f">תוספת ₪ (שינוע / סבלות / המתנה)<input id="add" type="number" inputmode="decimal" dir="ltr" value="${esc(N.add || '')}" placeholder="0" ${dis}></label>
+      ${amt ? `<div class="wait" style="background:#e6f0ee;color:var(--fg);font-weight:700">לחיוב: ${shek(amt)} + מע"מ</div>` : '<p class="muted">המחיר לק"מ מגיע מהחברה. אפשר לשנות לתעודה הזאת.</p>'}
+    </section>`;
   const doneCard = !closed ? '' : `
     <section class="card"><h2>התעודה נסגרה ✓</h2>
       <p class="muted">${(lw + uw) ? 'המתנה לחיוב: ' + fmtMin(lw + uw) : 'בלי המתנה לחיוב'}</p>
@@ -262,14 +275,17 @@ async function viewNote() {
       <button class="btn ghost" id="view">לראות את ה-PDF</button>
     </section>`;
   const delBtn = N.status === 'loading' ? `<button class="btn ghost" id="del" style="color:var(--bad)">לבטל את התעודה</button>` : '';
-  $('#app').innerHTML = loadCard + extraCard + unloadCard + doneCard + `<div id="err"></div><button class="btn ghost" id="home">חזרה לרשימה</button>` + delBtn;
+  $('#app').innerHTML = loadCard + extraCard + unloadCard + payCard + doneCard + `<div id="err"></div><button class="btn ghost" id="home">חזרה לרשימה</button>` + delBtn;
   bindNote();
 }
 
 async function readFields() {
   if (!N || N.status === 'closed') return;
   const v = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  ['km', 'ppk', 'add'].forEach(k => { if (v(k) !== undefined) N[k] = v(k).trim(); });
+  const prevCo = N.companyId;
   if (v('companyId') !== undefined && v('companyId') !== '__new') N.companyId = v('companyId');
+  if (N.companyId && (N.companyId !== prevCo || N.ppk == null || N.ppk === '')) N.ppk = String(coPpk(S.companies.find(c => c.id === N.companyId)));
   ['date', 'from', 'fromAddr', 'to', 'toAddr', 'weight', 'cargo'].forEach(k => { if (v(k) !== undefined) N[k] = v(k).trim(); });
   if (v('la') !== undefined) N.load.arrive = v('la');
   if (v('le') !== undefined) N.load.end = v('le');
@@ -291,15 +307,15 @@ function bindNote() {
   $('#home').onclick = async () => { await readFields(); go('#'); };
   document.querySelectorAll('input,select').forEach(el => el.addEventListener('change', async () => {
     if (el.id === 'companyId' || el.id === 'cam' || el.id === 'cam2' || el.id === 'newcoName') return;
-    await readFields(); if (['la', 'le', 'ua', 'ue', 'sa', 'se', 'son', 'from', 'fromAddr', 'to', 'toAddr'].includes(el.id)) viewNote();
+    await readFields(); if (['la', 'le', 'ua', 'ue', 'sa', 'se', 'son', 'km', 'ppk', 'add', 'from', 'fromAddr', 'to', 'toAddr'].includes(el.id)) viewNote();
   }));
   document.querySelectorAll('[data-now]').forEach(b => b.onclick = async () => { document.getElementById(b.dataset.now).value = nowHM(); await readFields(); viewNote(); });
   const co = $('#companyId');
-  co.onchange = async () => { if (co.value === '__new') { $('#newco').hidden = false; $('#newcoName').focus(); } else { $('#newco').hidden = true; await readFields(); } };
+  co.onchange = async () => { if (co.value === '__new') { $('#newco').hidden = false; $('#newcoName').focus(); } else { $('#newco').hidden = true; await readFields(); viewNote(); } };
   $('#newcoSave').onclick = async () => {
     const name = $('#newcoName').value.trim(); if (!name) return;
-    const c = { id: newId(), name }; S.companies.push(c);
-    await readFields(); N.companyId = c.id; await save(); viewNote(); toast('החברה נוספה');
+    const c = { id: newId(), name, ppk: 18 }; S.companies.push(c);
+    await readFields(); N.companyId = c.id; N.ppk = '18'; await save(); viewNote(); toast('החברה נוספה');
   };
   const cam = $('#cam');
   if (cam) cam.onchange = async () => {
@@ -402,6 +418,7 @@ async function makePdf(n) {
       <tr><td style="${td}">העמסה</td><td style="${td}">${n.load.arrive}</td><td style="${td}">${n.load.end}</td><td style="${td}">${lw ? fmtMin(lw) : '—'}</td></tr>
       <tr><td style="${td}">פריקה</td><td style="${td}">${n.unload.arrive}</td><td style="${td}">${n.unload.end}</td><td style="${td}">${uw ? fmtMin(uw) : '—'}</td></tr>
     </table>
+    ${n.km ? `<div style="font-size:15px;margin-bottom:10px">ק"מ: <b>${esc(n.km)}</b></div>` : ''}
     ${exOf(n).on ? `<table style="width:100%;border-collapse:collapse;margin-bottom:14px"><tr><td style="${td};width:28%;background:#f2f5f4">שינוע וסבלות</td><td style="${td}">${esc(exOf(n).what) || '—'}</td></tr><tr><td style="${td};background:#f2f5f4">זמן במקום</td><td style="${td}">${exOf(n).start} – ${exOf(n).end}${mins(exOf(n).start, exOf(n).end) != null ? ' · <b>' + fmtMin(mins(exOf(n).start, exOf(n).end)) + '</b>' : ''}</td></tr></table>` : ''}
     ${(lw + uw) ? `<div style="font-size:16px;font-weight:700;margin-bottom:14px">סה״כ המתנה לחיוב: ${fmtMin(lw + uw)}</div>` : ''}
     ${docsOf(n).length ? `<div style="font-size:14px;color:#444;margin-bottom:10px">מצורפת תעודת המשלוח של המפעל (${docsOf(n).length === 1 ? 'בעמוד הבא' : docsOf(n).length + ' עמודים בהמשך'}).</div>` : ''}
@@ -456,8 +473,10 @@ function viewSettings() {
       <label class="f">לשנות (רק אם יש טעות)<input id="nx" inputmode="numeric" dir="ltr" value="${fmtNo(S.next)}"></label>
       <button class="btn brand" id="nxs">לשמור מספר</button></section>
     <section class="card"><h2>חברות (${list.length})</h2>
-      <div class="list">${list.map(c => `<div class="item" style="grid-template-columns:1fr auto"><span>${esc(c.name)}</span><button class="btn ghost" data-ren="${c.id}" style="padding:6px 10px">שינוי שם</button></div>`).join('')}</div>
+      <div class="list">${list.map(c => `<div class="item" style="grid-template-columns:1fr 78px auto;align-items:center"><span>${esc(c.name)}</span><label style="font-size:.8rem;color:var(--muted)">₪ לק"מ<input data-ppk="${c.id}" type="number" inputmode="decimal" dir="ltr" value="${coPpk(c)}" style="padding:6px"></label><button class="btn ghost" data-ren="${c.id}" style="padding:6px 10px">שינוי שם</button></div>`).join('')}</div>
       <label class="f">חברה חדשה<input id="cn"></label><button class="btn brand" id="cadd">הוסף</button></section>
+    <section class="card"><h2>מחירון לק"מ</h2>
+      <div class="muted" style="color:var(--fg);line-height:1.7">משאית 7.5 טון: בשוק 18–20 ₪<br>9 / 10 / 12 טון: בשוק 24–30 ₪<br><b>לקוחות קבועים (מפעלים): 15 ₪</b><br>חברה חדשה נכנסת עם 18 ₪. משנים ליד שם החברה.</div></section>
     <section class="card"><h2>העסק</h2>
       <label class="f">שם<input id="bn" value="${esc(S.biz.name)}"></label>
       <div class="row2"><label class="f">מספר עוסק<input id="bi" dir="ltr" value="${esc(S.biz.id)}"></label><label class="f">משאית<input id="bt" dir="ltr" value="${esc(S.biz.truck)}"></label></div>
@@ -466,7 +485,8 @@ function viewSettings() {
     <button class="btn ghost" id="home">חזרה</button>`;
   $('#home').onclick = () => go('#');
   $('#nxs').onclick = async () => { const raw = $('#nx').value.trim(); if (!/^\d{1,8}$/.test(raw)) return toast('רק ספרות'); if (!confirm('התעודה הבאה תהיה ' + raw + '. בטוח?')) return; S.next = +raw; S.padLen = raw.length; await save(); toast('נשמר'); viewSettings(); };
-  $('#cadd').onclick = async () => { const name = $('#cn').value.trim(); if (!name) return; S.companies.push({ id: newId(), name }); await save(); toast('נוספה'); viewSettings(); };
+  $('#cadd').onclick = async () => { const name = $('#cn').value.trim(); if (!name) return; S.companies.push({ id: newId(), name, ppk: 18 }); await save(); toast('נוספה'); viewSettings(); };
+  document.querySelectorAll('[data-ppk]').forEach(i => i.onchange = async () => { const c = S.companies.find(x => x.id === i.dataset.ppk); c.ppk = +i.value || 0; await save(); toast('המחיר נשמר'); });
   document.querySelectorAll('[data-ren]').forEach(b => b.onclick = async () => { const c = S.companies.find(x => x.id === b.dataset.ren); const name = prompt('שם החברה', c.name); if (!name || !name.trim()) return; c.name = name.trim(); await save(); viewSettings(); });
   $('#bs').onclick = async () => { S.biz = { name: $('#bn').value.trim(), id: $('#bi').value.trim(), truck: $('#bt').value.trim() }; await save(); toast('נשמר'); };
 }
