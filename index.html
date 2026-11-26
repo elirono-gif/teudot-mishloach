@@ -111,6 +111,8 @@ const coPpk = c => (c && c.ppk != null) ? c.ppk : 15;
 const noteAmt = n => (+n.km || 0) * (+n.ppk || 0) + (+n.add || 0);
 const shek = n => '₪' + Math.round(n).toLocaleString('he-IL');
 const VAT = 0.18;
+const TRUCKS = ['פלטה עם רמפה', 'ארגז סגור', 'מנוף', 'משאית 15 טון ומעלה', 'טריילר', 'אחר'];
+const truckOf = n => n.truck === 'אחר' ? (n.truckOther || 'אחר') : (n.truck || '');
 async function addPhoto(data) { const id = newId(); PH[id] = data; await idb.set('ph:' + id, data); return id; }
 
 // Setup data comes in the link's #s=… part (never sent to any server).
@@ -227,6 +229,8 @@ async function viewNote() {
     <section class="card"><h2>1 · העמסה</h2>
       <label class="f">חברה<select id="companyId" ${dis}><option value="">בחר חברה…</option>${coOpts}<option value="__new">+ חברה חדשה</option></select></label>
       <div id="newco" hidden class="card" style="background:#f6f9f8"><label class="f">שם החברה<input id="newcoName"></label><button class="btn brand" id="newcoSave" type="button">הוסף חברה</button></div>
+      <label class="f">סוג משאית<select id="truck" ${dis}><option value="">בחר…</option>${TRUCKS.map(t => `<option ${t === N.truck ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${N.truck === 'אחר' ? `<label class="f">איזו משאית<input id="truckOther" value="${esc(N.truckOther || '')}" ${dis}></label>` : ''}
       <label class="f">תאריך<input type="date" id="date" value="${esc(N.date)}" ${dis}></label>
       <div class="f" style="font-weight:700">מאיפה</div>
       <label class="f">שם המקום<input id="from" value="${esc(N.from)}" placeholder="מפעל / מחסן / שם פרויקט" ${dis}></label>
@@ -293,7 +297,7 @@ async function readFields() {
   const prevCo = N.companyId;
   if (v('companyId') !== undefined && v('companyId') !== '__new') N.companyId = v('companyId');
   if (N.companyId && (N.companyId !== prevCo || N.ppk == null || N.ppk === '')) N.ppk = String(coPpk(S.companies.find(c => c.id === N.companyId)));
-  ['date', 'from', 'fromAddr', 'to', 'toAddr', 'weight', 'cargo'].forEach(k => { if (v(k) !== undefined) N[k] = v(k).trim(); });
+  ['date', 'truck', 'truckOther', 'from', 'fromAddr', 'to', 'toAddr', 'weight', 'cargo'].forEach(k => { if (v(k) !== undefined) N[k] = v(k).trim(); });
   if (v('la') !== undefined) N.load.arrive = v('la');
   if (v('le') !== undefined) N.load.end = v('le');
   if (v('ua') !== undefined) N.unload.arrive = v('ua');
@@ -314,7 +318,7 @@ function bindNote() {
   $('#home').onclick = async () => { await readFields(); go('#'); };
   document.querySelectorAll('input,select').forEach(el => el.addEventListener('change', async () => {
     if (el.id === 'companyId' || el.id === 'cam' || el.id === 'cam2' || el.id === 'newcoName') return;
-    await readFields(); if (['la', 'le', 'ua', 'ue', 'sa', 'se', 'son', 'km', 'ppk', 'add', 'from', 'fromAddr', 'to', 'toAddr'].includes(el.id)) viewNote();
+    await readFields(); if (['truck', 'la', 'le', 'ua', 'ue', 'sa', 'se', 'son', 'km', 'ppk', 'add', 'from', 'fromAddr', 'to', 'toAddr'].includes(el.id)) viewNote();
   }));
   document.querySelectorAll('[data-now]').forEach(b => b.onclick = async () => { document.getElementById(b.dataset.now).value = nowHM(); await readFields(); viewNote(); });
   const co = $('#companyId');
@@ -345,6 +349,7 @@ function bindNote() {
   if (dep) dep.onclick = async () => {
     await readFields();
     if (!N.companyId) return showErr('בחר חברה.');
+    if (!N.truck) return showErr('בחר סוג משאית.');
     if (!place(N, 'from') || !place(N, 'to')) return showErr('מלא מאיפה ולאן (שם המקום או כתובת).');
     if (!N.load.arrive) return showErr('מלא שעת הגעה להעמסה.');
     if (!N.load.photos.length) return showErr('צלם את המטען לפני שיוצאים.');
@@ -415,6 +420,7 @@ async function makePdf(n) {
     </div>
     <div style="font-size:18px;margin:16px 0 10px"><b>לכבוד:</b> ${esc(coName(n.companyId))}</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+      ${truckOf(n) ? `<tr><td style="${td};width:28%;background:#f2f5f4">סוג משאית</td><td style="${td}">${esc(truckOf(n))}</td></tr>` : ''}
       <tr><td style="${td};width:28%;background:#f2f5f4">מאיפה</td><td style="${td}">${esc(place(n, 'from'))}</td></tr>
       <tr><td style="${td};background:#f2f5f4">לאן</td><td style="${td}">${esc(place(n, 'to'))}</td></tr>
       ${n.cargo ? `<tr><td style="${td};background:#f2f5f4">מטען</td><td style="${td}">${esc(n.cargo)}</td></tr>` : ''}
