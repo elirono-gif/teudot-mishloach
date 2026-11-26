@@ -581,7 +581,7 @@ function installBox() {
     if (setup.l && /^\d{1,8}$/.test(setup.l) && (!S.next || !S.notes.length)) { S.next = +setup.l + 1; S.padLen = setup.l.length; }
     if (setup.p) S.profit = Object.assign({ fv: (S.profit && S.profit.fv) || {} }, setup.p);
     await save();
-    history.replaceState(null, '', location.pathname);
+    if (!/WhatsApp|FBAN|FBAV|FB_IAB|Instagram|Line\/|; wv\)/i.test(navigator.userAgent)) history.replaceState(null, '', location.pathname);   // keep the setup in the address when inside WhatsApp, so 'open in Chrome' carries it
   }
   render();
 })();
